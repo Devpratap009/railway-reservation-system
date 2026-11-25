@@ -6,7 +6,7 @@ import BookTicketPage from "./pages/BookTicketPage";
 import BookingsPage from "./pages/BookingsPage";
 import AdminPage from "./pages/AdminPage";
 
-const API_BASE = "http://localhost:5000/api";
+const API_BASE = "https://railway-reservation-system-1-3ywh.onrender.com/api";
 
 export default function App() {
   const [bookings, setBookings] = useState([]);
