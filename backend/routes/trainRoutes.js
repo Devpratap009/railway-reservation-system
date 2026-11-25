@@ -4,10 +4,11 @@ import {
   getAllTrains,
   checkAvailability,
 } from "../controllers/trainController.js";
+import { authorize, protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.post("/", addTrain);
+router.post("/", protect, authorize("admin"), addTrain);
 router.get("/", getAllTrains);
 router.get("/:trainId/availability", checkAvailability);
 

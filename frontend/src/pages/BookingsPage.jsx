@@ -7,24 +7,29 @@ export default function BookingsPage({
   error,
   onCancel,
   onRefresh,
+  isAdmin = false,
 }) {
   return (
     <div className="page">
       <div className="page-header">
         <div>
-          <h1>My Bookings</h1>
+          <h1>{isAdmin ? "All Passenger Bookings" : "My Bookings"}</h1>
           <p className="subtitle">
-            View all booked tickets, check their status, or cancel to release seats.
+            {isAdmin
+              ? "Review passenger reservations and manage ticket status."
+              : "View your reserved tickets, check their status, or cancel a booking."}
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: "0.65rem" }}>
+        <div className="booking-actions">
           <button type="button" className="btn" onClick={onRefresh}>
             Refresh
           </button>
-          <Link to="/book" className="btn primary">
-            + Book Another Ticket
-          </Link>
+          {!isAdmin && (
+            <Link to="/book" className="btn primary">
+              + Book Another Ticket
+            </Link>
+          )}
         </div>
       </div>
 
@@ -33,6 +38,7 @@ export default function BookingsPage({
         loading={loading}
         error={error}
         onCancel={onCancel}
+        isAdmin={isAdmin}
       />
     </div>
   );

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { trainAPI } from "../api/axios";
 import TrainList from "../components/TrainList";
 
-export default function HomePage() {
+export default function HomePage({ refreshKey = 0 }) {
   const [trains, setTrains] = useState([]);
   const [source, setSource] = useState("");
   const [destination, setDestination] = useState("");
@@ -48,7 +48,7 @@ export default function HomePage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [refreshKey]);
 
   const handleSearch = (e) => {
     e.preventDefault();

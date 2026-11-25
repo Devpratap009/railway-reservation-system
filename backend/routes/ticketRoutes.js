@@ -4,10 +4,12 @@ import {
   getAllBookings,
   cancelTicket,
 } from "../controllers/ticketController.js";
+import { authorize, protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.post("/book", bookTicket);
+router.use(protect);
+router.post("/book", authorize("user"), bookTicket);
 router.get("/", getAllBookings);
 router.patch("/:ticketId/cancel", cancelTicket);
 

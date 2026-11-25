@@ -1,4 +1,4 @@
-export default function BookingsList({ bookings, loading, error, onCancel }) {
+export default function BookingsList({ bookings, loading, error, onCancel, isAdmin = false }) {
   if (loading) {
     return (
       <div className="card">
@@ -32,6 +32,7 @@ export default function BookingsList({ bookings, loading, error, onCancel }) {
           <tr>
             <th>Ticket ID</th>
             <th>Train</th>
+            {isAdmin && <th>Booked By</th>}
             <th>Passengers</th>
             <th>Seats</th>
             <th>Status</th>
@@ -69,6 +70,14 @@ export default function BookingsList({ bookings, loading, error, onCancel }) {
                     </div>
                   )}
                 </td>
+                {isAdmin && (
+                  <td>
+                    <strong>{ticket.user?.name || "Legacy booking"}</strong>
+                    {ticket.user?.email && (
+                      <div className="booking-user-email">{ticket.user.email}</div>
+                    )}
+                  </td>
+                )}
                 <td>{passengers}</td>
                 <td>
                   <strong>{ticket.seatsBooked}</strong>

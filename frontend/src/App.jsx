@@ -1,90 +1,82 @@
 import { useCallback, useEffect, useState } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import Navbar from "./components/Navbar";
+import ProtectedRoute from "./components/ProtectedRoute";
 import HomePage from "./pages/HomePage";
 import BookTicketPage from "./pages/BookTicketPage";
 import BookingsPage from "./pages/BookingsPage";
 import AdminPage from "./pages/AdminPage";
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
+import { useAuth } from "./context/authContext";
+import { ticketAPI } from "./api/axios";
 
-const API_BASE = "https://railway-reservation-system-1-3ywh.onrender.com/api";
-
-export default function App() {
+function App() {
+  const { user } = useAuth();
   const [bookings, setBookings] = useState([]);
-  const [loadingBookings, setLoadingBookings] = useState(true);
+  const [bookingsOwnerId, setBookingsOwnerId] = useState("");
+  const [loadingBookings, setLoadingBookings] = useState(false);
   const [bookingsError, setBookingsError] = useState("");
   const [refreshTrainsKey, setRefreshTrainsKey] = useState(0);
 
   const fetchBookings = useCallback(async () => {
+    if (!user) {
+      return;
+    }
+
     setLoadingBookings(true);
     setBookingsError("");
     try {
-      const res = await fetch(`${API_BASE}/tickets`);
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Failed to load bookings");
-      }
-      setBookings(Array.isArray(data) ? data : data.tickets || []);
+      const res = await ticketAPI.getAll();
+      setBookings(Array.isArray(res.data) ? res.data : res.data.tickets || []);
+      setBookingsOwnerId(user.id);
     } catch (err) {
-      setBookingsError(err.message || "Error loading bookings");
+      setBookingsError(err.response?.data?.message || "Failed to load bookings.");
     } finally {
       setLoadingBookings(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
+    if (!user) return undefined;
+
     let active = true;
-
-    const loadInitialBookings = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/tickets`);
-        const data = await res.json();
-        if (!active) return;
-        if (!res.ok) {
-          throw new Error(data.message || "Failed to load bookings");
-        }
-        setBookings(Array.isArray(data) ? data : data.tickets || []);
-        setBookingsError("");
-      } catch (err) {
+    ticketAPI.getAll()
+      .then((res) => {
         if (active) {
-          setBookingsError(err.message || "Error loading bookings");
+          setBookings(Array.isArray(res.data) ? res.data : res.data.tickets || []);
+          setBookingsOwnerId(user.id);
+          setBookingsError("");
         }
-      } finally {
+      })
+      .catch((err) => {
         if (active) {
-          setLoadingBookings(false);
+          setBookingsError(err.response?.data?.message || "Failed to load bookings.");
         }
-      }
-    };
-
-    loadInitialBookings();
+      })
+      .finally(() => {
+        if (active) setLoadingBookings(false);
+      });
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [user]);
 
   const handleBooked = useCallback(async () => {
-    setRefreshTrainsKey((prev) => prev + 1);
+    setRefreshTrainsKey((current) => current + 1);
     await fetchBookings();
   }, [fetchBookings]);
 
-  const handleCancelTicket = useCallback(
-    async (ticketId) => {
-      try {
-        const res = await fetch(`${API_BASE}/tickets/${ticketId}/cancel`, {
-          method: "PATCH",
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.message || "Failed to cancel ticket");
-        }
-        setRefreshTrainsKey((prev) => prev + 1);
-        await fetchBookings();
-      } catch (err) {
-        setBookingsError(err.message || "Could not cancel ticket");
-      }
-    },
-    [fetchBookings]
-  );
+  const handleCancelTicket = useCallback(async (ticketId) => {
+    try {
+      await ticketAPI.cancel(ticketId);
+      setRefreshTrainsKey((current) => current + 1);
+      await fetchBookings();
+    } catch (err) {
+      setBookingsError(err.response?.data?.message || "Could not cancel this ticket.");
+    }
+  }, [fetchBookings]);
 
   return (
     <>
@@ -92,23 +84,46 @@ export default function App() {
       <main className="container">
         <Routes>
           <Route path="/" element={<HomePage refreshKey={refreshTrainsKey} />} />
-          <Route path="/book" element={<BookTicketPage onBooked={handleBooked} />} />
+          <Route
+            path="/book"
+            element={
+              <ProtectedRoute allowedRoles={["user"]}>
+                <BookTicketPage onBooked={handleBooked} />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/bookings"
             element={
-              <BookingsPage
-                bookings={bookings}
-                loading={loadingBookings}
-                error={bookingsError}
-                onCancel={handleCancelTicket}
-                onRefresh={fetchBookings}
-              />
+              <ProtectedRoute allowedRoles={["user", "admin"]}>
+                <BookingsPage
+                  bookings={bookingsOwnerId === user?.id ? bookings : []}
+                  loading={loadingBookings}
+                  error={bookingsOwnerId === user?.id ? bookingsError : ""}
+                  onCancel={handleCancelTicket}
+                  onRefresh={fetchBookings}
+                  isAdmin={user?.role === "admin"}
+                />
+              </ProtectedRoute>
             }
           />
-          <Route path="/admin" element={<AdminPage />} />
-          <Route path="*" element={<HomePage refreshKey={refreshTrainsKey} />} />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/login/user" element={<LoginPage role="user" />} />
+          <Route path="/login/admin" element={<LoginPage role="admin" />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/login" element={<Navigate to="/login/user" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
     </>
   );
 }
+
+export default App;

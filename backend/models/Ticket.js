@@ -12,6 +12,12 @@ const ticketSchema = new mongoose.Schema(
       ref: "Train",
       required: [true, "Train reference is required"],
     },
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: false,
+      index: true,
+    },
     trainId: {
       type: Number,
       required: true,

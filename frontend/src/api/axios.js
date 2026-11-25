@@ -7,6 +7,20 @@ const api = axios.create({
   },
 });
 
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("railpulse_token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+export const authAPI = {
+  register: (data) => api.post("/auth/register", data),
+  login: (data) => api.post("/auth/login", data),
+  me: () => api.get("/auth/me"),
+};
+
 export const trainAPI = {
   getAll: (params = {}) => api.get("/trains", { params }),
   add: (data) => api.post("/trains", data),
