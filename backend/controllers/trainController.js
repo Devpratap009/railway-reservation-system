@@ -1,4 +1,5 @@
 import Train from "../models/Train.js";
+import { emitTrainCreated } from "../config/socket.js";
 
 // @desc    Add a new train
 // @route   POST /api/trains
@@ -28,6 +29,7 @@ export const addTrain = async (req, res) => {
     });
 
     const savedTrain = await train.save();
+    emitTrainCreated(savedTrain);
     res.status(201).json(savedTrain);
   } catch (error) {
     res.status(500).json({ message: error.message });

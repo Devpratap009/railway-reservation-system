@@ -1455,3 +1455,83 @@ td strong {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Real-time seat availability status */
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.live-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: fit-content;
+  padding: 0.58rem 0.82rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--muted-dark);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.075em;
+  white-space: nowrap;
+}
+
+.live-status.is-connected {
+  border-color: rgba(35, 123, 88, 0.2);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.live-status.is-connecting {
+  border-color: rgba(215, 166, 75, 0.28);
+  background: #fff8e9;
+  color: #956b22;
+}
+
+.live-status-dot {
+  display: inline-block;
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 0 3px rgba(215, 166, 75, 0.14);
+}
+
+.live-status.is-connected .live-status-dot,
+.live-form-note .live-status-dot {
+  background: var(--success);
+  box-shadow: 0 0 0 3px rgba(35, 123, 88, 0.12);
+  animation: live-pulse 1.8s ease-in-out infinite;
+}
+
+.live-form-note {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: -0.55rem 0 0.2rem;
+  color: var(--muted-dark);
+  font-size: 0.82rem;
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.48; }
+}
+
+@media (max-width: 640px) {
+  .page-header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-status-dot {
+    animation: none !important;
+  }
+}

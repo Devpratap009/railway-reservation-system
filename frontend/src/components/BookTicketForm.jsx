@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ticketAPI, trainAPI } from "../api/axios";
+import { getSocket } from "../realtime/socket";
 
 export default function BookTicketForm({ initialTrainId = "", onBooked }) {
   const [trains, setTrains] = useState([]);
@@ -21,6 +22,52 @@ export default function BookTicketForm({ initialTrainId = "", onBooked }) {
       setError("Could not load trains");
     }
   };
+
+  useEffect(() => {
+    const socket = getSocket();
+    const handleAvailabilityUpdate = (update) => {
+      setTrains((currentTrains) =>
+        currentTrains.map((train) =>
+          Number(train.trainId) === Number(update.trainId)
+            ? {
+                ...train,
+                availableSeats: update.availableSeats,
+                totalSeats: update.totalSeats ?? train.totalSeats,
+              }
+            : train
+        )
+      );
+    };
+
+    const syncTrains = async () => {
+      try {
+        const res = await trainAPI.getAll();
+        setTrains(res.data);
+      } catch {
+        // Keep the current availability if a background sync fails.
+      }
+    };
+
+    const handleTrainCreated = (newTrain) => {
+      setTrains((currentTrains) => {
+        if (currentTrains.some((train) => Number(train.trainId) === Number(newTrain.trainId))) {
+          return currentTrains;
+        }
+        return [...currentTrains, newTrain].sort((a, b) => a.trainId - b.trainId);
+      });
+    };
+
+    socket.on("train:availability", handleAvailabilityUpdate);
+    socket.on("train:created", handleTrainCreated);
+    socket.on("connect", syncTrains);
+    if (socket.connected) syncTrains();
+
+    return () => {
+      socket.off("train:availability", handleAvailabilityUpdate);
+      socket.off("train:created", handleTrainCreated);
+      socket.off("connect", syncTrains);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -105,6 +152,9 @@ export default function BookTicketForm({ initialTrainId = "", onBooked }) {
   return (
     <form onSubmit={handleSubmit} className="card form-grid">
       <h2>Book Train Ticket</h2>
+      <p className="live-form-note">
+        <span className="live-status-dot" /> Seat availability syncs live while you book.
+      </p>
 
       <label>
         Select Train
@@ -159,9 +209,18 @@ export default function BookTicketForm({ initialTrainId = "", onBooked }) {
       <button
         type="submit"
         className="btn primary"
-        disabled={submitting || !trains.length}
+        disabled={
+          submitting ||
+          !trains.length ||
+          !selectedTrain ||
+          selectedTrain.availableSeats < Number(seatsToBook)
+        }
       >
-        {submitting ? "Booking..." : "Confirm Booking"}
+        {submitting
+          ? "Booking..."
+          : selectedTrain && selectedTrain.availableSeats < Number(seatsToBook)
+            ? "Not enough seats available"
+            : "Confirm Booking"}
       </button>
 
       {message && <p className="success">{message}</p>}

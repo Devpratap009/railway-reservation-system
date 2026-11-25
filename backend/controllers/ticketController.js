@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
 import Ticket from "../models/Ticket.js";
 import Train from "../models/Train.js";
+import { emitTrainAvailability } from "../config/socket.js";
+
+const isTransactionConflict = (error) =>
+  error?.code === 112 || error?.hasErrorLabel?.("TransientTransactionError");
 
 // Admins can view every booking; regular users only see their own tickets.
 export const getAllBookings = async (req, res) => {
@@ -52,27 +56,33 @@ export const bookTicket = async (req, res) => {
       });
     }
 
-    const train = await Train.findOne({ trainId: Number(trainId) }).session(session);
+    // Reserve seats atomically so two simultaneous requests cannot sell the same seat.
+    const updatedTrain = await Train.findOneAndUpdate(
+      {
+        trainId: Number(trainId),
+        availableSeats: { $gte: seatsCount },
+      },
+      { $inc: { availableSeats: -seatsCount } },
+      { new: true, session, runValidators: true }
+    );
 
-    if (!train) {
+    if (!updatedTrain) {
+      const existingTrain = await Train.findOne({ trainId: Number(trainId) }).session(session);
       await session.abortTransaction();
-      return res.status(404).json({ message: "No train found." });
-    }
 
-    if (train.availableSeats < seatsCount) {
-      await session.abortTransaction();
+      if (!existingTrain) {
+        return res.status(404).json({ message: "No train found." });
+      }
+
       return res.status(400).json({
-        message: `Not enough available seats. Only ${train.availableSeats} seat(s) left.`,
+        message: `Not enough available seats. Only ${existingTrain.availableSeats} seat(s) left.`,
       });
     }
 
-    train.availableSeats -= seatsCount;
-    await train.save({ session });
-
     const ticket = new Ticket({
       user: req.user._id,
-      train: train._id,
-      trainId: train.trainId,
+      train: updatedTrain._id,
+      trainId: updatedTrain.trainId,
       passengerNames: rawNames,
       passengerName: rawNames.join(", "),
       seatsBooked: seatsCount,
@@ -81,6 +91,9 @@ export const bookTicket = async (req, res) => {
 
     const savedTicket = await ticket.save({ session });
     await session.commitTransaction();
+
+    // Notify connected clients only after MongoDB has committed the booking.
+    emitTrainAvailability(updatedTrain);
 
     const populatedTicket = await Ticket.findById(savedTicket._id)
       .populate("train", "trainId name source destination")
@@ -92,6 +105,11 @@ export const bookTicket = async (req, res) => {
     });
   } catch (error) {
     if (session.inTransaction()) await session.abortTransaction();
+    if (isTransactionConflict(error)) {
+      return res.status(409).json({
+        message: "Seat availability changed while you were booking. Please check the latest count and try again.",
+      });
+    }
     return res.status(500).json({ message: error.message });
   } finally {
     await session.endSession();
@@ -127,17 +145,21 @@ export const cancelTicket = async (req, res) => {
     }
 
     const train = await Train.findById(ticket.train).session(session);
+    let updatedTrain = null;
     if (train) {
       train.availableSeats = Math.min(
         train.totalSeats,
         train.availableSeats + ticket.seatsBooked
       );
-      await train.save({ session });
+      updatedTrain = await train.save({ session });
     }
 
     ticket.status = "CANCELLED";
     await ticket.save({ session });
     await session.commitTransaction();
+
+    // Notify connected clients after the cancellation and seat restoration commit.
+    if (updatedTrain) emitTrainAvailability(updatedTrain);
 
     return res.status(200).json({
       message: "Ticket cancelled and seats restored.",
@@ -145,6 +167,11 @@ export const cancelTicket = async (req, res) => {
     });
   } catch (error) {
     if (session.inTransaction()) await session.abortTransaction();
+    if (isTransactionConflict(error)) {
+      return res.status(409).json({
+        message: "This booking was updated at the same time. Refresh your bookings and try again.",
+      });
+    }
     return res.status(500).json({ message: error.message });
   } finally {
     await session.endSession();
